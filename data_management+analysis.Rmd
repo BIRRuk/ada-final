@@ -1,0 +1,345 @@
+---
+title: "ADA Final Project"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+^\_^\^\_\^^\_^
+
+```{r}
+pacman::p_load(haven, ggplot2, nhanesA, table1, broom, mice)
+```
+
+Reading in the data from CDC website using haven
+
+```{r}
+url_demographics <- "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/DEMO_L.xpt"
+url_depression_screener <- "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/DPQ_L.xpt"
+url_total_nutiet <- "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/DR1TOT_L.xpt"
+
+df_demographics <- haven::read_xpt(url_demographics)
+df_depression <- haven::read_xpt(url_depression_screener)
+df_nutrient <- haven::read_xpt(url_total_nutiet)
+```
+
+changed the depression screener questionare columns from a continium to boolean (more than half of the days considered positive)
+
+```{r}
+
+# depression variables
+phq_vars <- c("DPQ010","DPQ020","DPQ030","DPQ040",
+              "DPQ050","DPQ060","DPQ070","DPQ080","DPQ090")
+
+for (var in phq_vars) {
+  new_var <- paste0(var, "_bool")  # Add trailing B
+  df_depression[[new_var]] <- ifelse(df_depression[[var]] %in% c(7, 9, '.'), NA,
+                                     ifelse(df_depression[[var]] >= 2, 1, 0))
+}
+
+df_depression
+```
+
+Logic to implement Diagnostic and Statistical Manual V criteria of depression
+
+more than 5 of 9 with at least one of them being depressed mood or loss of interst
+
+```{r}
+
+df_depression$dsmv_depression <- apply(df_depression[paste0(phq_vars, "_bool")], 1, function(row) {
+    # Count symptoms (excluding NAs)
+    symptom_count <- sum(row, na.rm = TRUE)
+    
+    # Check core symptoms: depressed mood or anhedonia
+    core_symptom <- (row["DPQ010_bool"] == 1 | row["DPQ020_bool"] == 1)
+    
+    # Handle NA in core_symptom
+    core_symptom <- ifelse(is.na(core_symptom), FALSE, core_symptom)
+    
+    # DSM-V criteria: >=5 symptoms AND core symptom present
+    if (symptom_count >= 5 && core_symptom) {
+      return(1)
+    } else {
+      return(0)
+    }
+})
+
+
+table(df_depression$dsmv_depression, useNA = "ifany")
+
+```
+
+Inner join the 3 tables
+
+```{r}
+df <- merge(df_demographics, df_nutrient, by = "SEQN", all = FALSE)
+df <- merge(df, df_depression, by = "SEQN", all = FALSE)
+df
+```
+
+```{r}
+head(df)
+```
+
+### select analysis subset of variables
+
+```{r}
+vars = c(
+    'RIDAGEYR' #age
+  , 'DMDHRGND' #gender
+  , 'RIDRETH3' #ethnicity
+  , 'DMDEDUC2' #education
+  , 'DR1TSFAT' #sat fat
+  , 'dsmv_depression' 
+  )
+
+df_analysis <- df[vars]
+str(df_analysis)
+```
+
+```{r}
+df_analysis <- df_analysis[!is.na(df_analysis$DR1TSFAT), ]
+df_analysis <- df_analysis[!is.na(df_analysis$dsmv_depression), ]
+```
+
+```{r}
+
+df_analysis$DMDHRGND <- factor(df_analysis$DMDHRGND,
+                                levels = c(1, 2),
+                                labels = c("Male", "Female"))
+
+
+```
+
+```{r}
+
+mapping <- c(
+  "1" = "Hispanic",
+  "2" = "Hispanic",
+  "3" = "Non-Hispanic White",
+  "4" = "Non-Hispanic Black",
+  "6" = "Non-Hispanic Asian",
+  "7" = "Other Race"
+)
+
+# Apply mapping
+df_analysis$RIDRETH3 <- mapping[as.character(df_analysis$RIDRETH3)]
+
+# Convert to factor with desired order
+df_analysis$RIDRETH3 <- factor(df_analysis$RIDRETH3,
+    levels = c("Non-Hispanic White",  "Hispanic", "Non-Hispanic Black",
+        "Non-Hispanic Asian", "Other Race"), ordered = FALSE)
+
+
+```
+
+```{r}
+edu_mapping <- c(
+  "1" = "Less than high school grad",   # <9th grade
+  "2" = "Less than high school grad",   # 9-11th grade
+  "3" = "High school/GED",         # High school graduate/GED
+  "4" = "Some college/AA",         # Some college or AA degree
+  "5" = "College graduate or above" # College graduate or above
+)
+
+
+df_analysis$DMDEDUC2[df_analysis$DMDEDUC2 %in% c(7, 9, ".")] <- NA
+
+df_analysis$DMDEDUC2 <- edu_mapping[as.character(df_analysis$DMDEDUC2)]
+df_analysis$DMDEDUC2 <- factor(df_analysis$DMDEDUC2,
+                                        levels = c("Less than high school grad",
+                                                   "High school/GED",
+                                                   "Some college/AA",
+                                                   "College graduate or above"))
+
+```
+
+### Table1
+
+```{r}
+label(df_analysis$RIDAGEYR)   <- "Age (years)"
+label(df_analysis$DMDHRGND)   <- "Gender"
+label(df_analysis$RIDRETH3)   <- "Ethnicity"
+label(df_analysis$DMDEDUC2)   <- "Education"
+label(df_analysis$DR1TSFAT)   <- "Saturated Fat Intake (g/day)"
+label(df_analysis$dsmv_depression) <- "DSM-V Depression"
+
+
+table1(~ RIDAGEYR + DMDHRGND + RIDRETH3 + DMDEDUC2 + DR1TSFAT | dsmv_depression,
+       data = df_analysis,
+       overall = FALSE)
+
+```
+
+```{r}
+
+df_analysis$DR1TSFAT <- as.numeric(df_analysis$DR1TSFAT)
+```
+
+```{r}
+ggplot(df, aes(x = dsmv_depression)) +
+  geom_bar(fill = "steelblue") +
+  labs(title = "DSM-V Depression Diagnosis",
+       x = "DSM-V Depression (0 = No, 1 = Yes)",
+       y = "Count") +
+  theme_minimal()
+
+```
+
+```{r}
+
+ggplot(df_analysis, aes(x = DR1TSFAT)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "black") +
+  facet_wrap(~ dsmv_depression, ncol = 2, scales = "free_y") +
+  
+facet_wrap(
+  ~ dsmv_depression,
+  ncol = 2,
+  scales = "free_y",
+  labeller = as_labeller(c(`0` = "No depression", `1` = "Depression"))
+) +
+
+  labs(
+    title = "Histogram of Saturated Fat Intake by Depression Status",
+    subtitle = "y values are independent",
+    x = "Saturated Fat Intake (grams)",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+
+ggplot(df_analysis, aes(x = factor(dsmv_depression), y = DR1TSFAT)) +
+  geom_boxplot(fill = "lightblue") +
+  labs(title = "Boxplot of Saturated Fat Intake by Depression Status",
+       x = "DSM-V Depression (0 = No, 1 = Yes)",
+       y = "Saturated Fat Intake (grams)") +
+  theme_minimal()
+
+```
+
+### doing a basic t-test
+
+it shows that there is no significant difference in means of the 2 groups
+
+```{r}
+t.test(DR1TSFAT ~ dsmv_depression, data = df_analysis)
+```
+
+## AGE fails linearity assumption in box tidwell
+
+```{r}
+
+model <- glm(dsmv_depression ~ DR1TSFAT + RIDAGEYR + RIDAGEYR*log(RIDAGEYR) + RIDRETH3 + DMDEDUC2,
+             data = df_analysis,
+             family = binomial(link = "logit"))
+
+
+summary(model)
+
+#exp(cbind(OR = coef(model), confint(model)))
+
+tidy(model, conf.int = TRUE)
+```
+
+```{r}
+ggplot(df_analysis, aes(x = RIDAGEYR)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "black") +
+  labs(title = "Distribution of Age",
+       x = "",
+       y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+
+df_analysis$RIDAGEYR <- cut(df_analysis$RIDAGEYR,
+                             breaks = c(-Inf, 40, 65, Inf),
+                             labels = c("<40", "40-65", ">65"),
+                             right = FALSE)
+
+summary(glm(dsmv_depression ~ DR1TSFAT + RIDAGEYR + RIDRETH3 + DMDEDUC2,
+             data = df_analysis,
+             family = binomial(link = "logit")))
+```
+
+## AGE, potential confounder?
+
+```{r}
+
+anova_model <- aov(DR1TSFAT ~ RIDAGEYR, data = df_analysis)
+summary(anova_model)
+
+```
+
+## Imputaiton
+
+imputed values missing in all rows, except for outcome and main exposure
+
+```{r}
+md.pattern(df_analysis, rotate.names = TRUE)
+```
+
+```{r}
+
+# Create a imputation method vector
+meth <- make.method(df_analysis)
+
+meth["DMDHRGND"] <- "logreg"
+meth["DMDEDUC2"] <- "polyreg"
+
+
+pred <- make.predictorMatrix(df_analysis)
+
+diag(pred) <- 0
+pred[, "dsmv_depression"] <- 0
+
+pred; meth
+```
+
+```{r}
+
+set.seed(123)  # reproducibility
+imp <- mice(
+  df_analysis,
+  m = 5,                
+  method = meth,         
+  predictorMatrix = pred
+)
+
+print(imp)
+
+```
+
+```{r}
+
+fit <- with(imp, glm(dsmv_depression ~ DR1TSFAT + RIDAGEYR +
+                     RIDRETH3 + DMDEDUC2,
+                     family = binomial(link = "logit")))
+
+
+pooled <- pool(fit)
+summary(pooled)
+
+
+```
+
+### pooled value also doesn't show a statistically significant association between saturate fat intake and depression prevalence
+
+Age \> 65, and being a high-school graduate or higher education were negatively correlated
+
+```{r}
+tidy(pooled, conf.int = TRUE, exponentiate = FALSE)
+```
+
+```{r}
+
+tidy_res <- tidy(pooled, conf.int = TRUE, exponentiate = TRUE)
+
+write.csv(tidy_res, "model_results.csv", row.names = FALSE)
+
+```
