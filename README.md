@@ -1,6 +1,6 @@
 # ADA Final Project
 
-## 📌 Overview
+## Overview
 
 This project analyzes **NHANES 2021 data** to explore the relationship between **saturated fat intake** and **DSM-V depression status**, adjusting for demographic and socioeconomic factors. It demonstrates:
 
@@ -15,7 +15,7 @@ This project analyzes **NHANES 2021 data** to explore the relationship between *
 
 ***
 
-## ✅ Data Sources
+## Data Sources
 
 *   **Demographics**: NHANES DEMO\_L
 *   **Depression Screener**: NHANES DPQ\_L
@@ -23,7 +23,7 @@ This project analyzes **NHANES 2021 data** to explore the relationship between *
 
 ***
 
-## 🔍 Key Steps
+## Key Steps
 
 ### 1. **Data Preparation**
 
@@ -84,13 +84,13 @@ pacman::p_load(haven, ggplot2, nhanesA, table1, broom, mice, TinyTeX)
 
 ***
 
-## ▶️ How to Run
+## How to Run
 
 1.  Clone the repo:
     ```bash
     git clone https://github.com/yourusername/ADA-Final-Project.git
     ```
-2.  Open `data_management+analysis.Rmd` in R-Studio and `Run All`
+2.  Open `data_management+analysis.Rmd` in R-Studio and 🟩`Run All`
     ```r
     Ctrl + Alt + R
     ```
@@ -98,7 +98,7 @@ pacman::p_load(haven, ggplot2, nhanesA, table1, broom, mice, TinyTeX)
 
 ***
 
-## 📂 Outputs
+## Outputs
 
 *   `table1` – Descriptive Table 1
 *   `model_results.csv` – Logistic regression results (OR + CI)
@@ -106,7 +106,7 @@ pacman::p_load(haven, ggplot2, nhanesA, table1, broom, mice, TinyTeX)
 
 ***
 
-## ✅ Key Findings
+## Key Findings
 
 *   No significant association between saturated fat intake and depression.
 *   Age >65 and higher education levels were negatively associated with depression prevalence.
