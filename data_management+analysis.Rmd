@@ -1,21 +1,115 @@
 ---
-title: "ADA Final Project"
+title: "Saturated Fat Intake and Depression in U.S. Adults"
+subtitle: "A Cross-Sectional Analysis of NHANES 2021–2023"
+author: "b.mekuria"
+date: "`r Sys.Date()`"
+  
 output:
-  html_document:
-    df_print: paged
-  html_notebook: default
-  pdf_document: default
+
+  revealjs::revealjs_presentation:
+    self_contained: true        # bundle assets into one HTML (optional)
+    incremental: false           # bullets appear one-by-one
+    slide_level: 2              # # = section, ## = individual slides
+    theme: "serif"             # built-in themes: simple, sky, beige, serif, etc.
+    transition: slide
+    center: false
+    #css: custom.css
+
+    reveal_options:
+      width: 100%               # 16:9 canvas
+      height: 100%
+      margin: 0.1              # small outer margin
+      minScale: 0.2
+      maxScale: 2.0
+
+
+
+  xaringan::moon_reader:
+    css: ["default", "custom.css"]
+  ioslides_presentation:
+    widescreen: true
+
+
 ---
 
-^\_^\^\_\^^\_^
 
-```{r}
-pacman::p_load(haven, ggplot2, nhanesA, table1, broom, mice)
+<style>
+
+.reveal .slides section {
+  text-align: left;
+  margin: 0 auto;
+}
+
+.reveal .slides section {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4.6rem;
+}
+
+.reveal pre code { white-space: pre-wrap; word-break: break-word; }
+
+</style>
+
+
+## Overview
+
+- Background & Rationale
+- Objectives
+- Methods
+- Results
+- Discussion
+- Conclusions
+
+---
+
+## Background & Rationale
+
+- **Depression**: concerning cause of morbidity globally; prevalence rising in U.S. adults.
+  - prevalence count: > 300 million worldwide 
+  - one of the leading causes of mortality in 15 - 29Y
+
+- **Dietary Factors**: Proposed as modifiers of depression risk; saturated fat implicated in inflammation and neurotransmitter regulation.
+- **Gap**: Evidence on saturated fat and depression is mixed; few recent U.S.-based analyses using nationally representative data.
+
+---
+
+## Objectives
+
+- **Primary Objective**  
+  Assess association between saturated fat intake (g/day) and moderate-to-severe depression among U.S. adults (NHANES 2021–2023).
+
+- **Secondary Objective**  
+  Explore effect modification by gender and race/ethnicity.
+
+---
+
+
+## Methods
+
+- **Design**: Cross-sectional analysis using NHANES 2021–2023. `[demographic, nutritional, depression screener]`
+- **Population**: Adults ≥18 years with complete data on saturated fat intake and PHQ-9 depression screening.
+- **Variables**:
+  - Exposure: Saturated fat intake (grams/day)
+  - Covariates: Age, gender, race/ethnicity, education
+- **Packages**:
+  - haven, ggplot2, mice, table1, DiagrammeR
+- **Analysis**:
+  - Logistic regression (adjusted)
+  - Assumption checks: multicollinearity, goodness-of-fit, linearity
+  - Multiple imputation for missing covariates
+
+
+---
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
+#install.packages("pacman")
+#install.packages("xaringan")
+pacman::p_load(haven, ggplot2, nhanesA, table1, broom, mice, DiagrammeR, dagitty, ggdag)
 ```
 
-Reading in the data from CDC website using haven
-
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 url_demographics <- "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/DEMO_L.xpt"
 url_depression_screener <- "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/DPQ_L.xpt"
 url_total_nutiet <- "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2021/DataFiles/DR1TOT_L.xpt"
@@ -25,9 +119,9 @@ df_depression <- haven::read_xpt(url_depression_screener)
 df_nutrient <- haven::read_xpt(url_total_nutiet)
 ```
 
-changed the depression screener questionare columns from a continium to boolean (more than half of the days considered positive)
 
-```{r}
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 
 # depression variables
 phq_vars <- c("DPQ010","DPQ020","DPQ030","DPQ040",
@@ -42,11 +136,8 @@ for (var in phq_vars) {
 df_depression
 ```
 
-Logic to implement Diagnostic and Statistical Manual V criteria of depression
 
-more than 5 of 9 with at least one of them being depressed mood or loss of interst
-
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 
 df_depression$dsmv_depression <- apply(df_depression[paste0(phq_vars, "_bool")], 1, function(row) {
     # Count symptoms (excluding NAs)
@@ -71,27 +162,88 @@ table(df_depression$dsmv_depression, useNA = "ifany")
 
 ```
 
-Inner join the 3 tables
+## Methods
 
-```{r}
+### Outcome Variable: Depression
+
+Moderate-to-severe depression assessed using **PHQ-9** and classified per **DSM-5 criteria**.
+
+1. Binarize **PHQ-9 Questions**:  Score ≥ 2 → symptom present.
+3. Apply DSM-5 criteria: ≥ 5 symptoms present **AND** at least one core symptom (interest or mood).
+
+
+PHQ-9 Questions, scored from 0–3 (Not at all - Almost everyday)
+  - Little interest or pleasure in doing things  
+  - Feeling down, depressed, or hopeless  
+  - Trouble sleeping or sleeping too much  
+  - Feeling tired or having little energy  
+  - Poor appetite or overeating  
+  - Feeling bad about yourself  
+  - Trouble concentrating  
+  - Moving or speaking slowly or being restless  
+  - Thoughts of self-harm  
+
+
+---
+
+## Conceptual Model (DAG)
+
+```{r, echo=FALSE, message=FALSE, fig.height=4, fig.width=6}
+# 
+dag <- dagitty('
+dag {
+  "Race/Ethnicity" [adjusted,pos="0.539,-1.073",label="Race/Ethnicity"]
+  Age [adjusted,pos="-1.638,-0.926"]
+  Depression [outcome,pos="0.644,0.153",label="Depression (PHQ-9)"]
+  Education [adjusted,pos="-0.073,-1.139"]
+  Gender [adjusted,pos="-0.896,-1.118",label="Gender"]
+  PhysicalActivity [adjusted,pos="0.185,1.423",label="Physical Activity"]
+  SaturatedFat [exposure,pos="-1.616,0.313",label="SaturatedFat (DSQISFAT)"]
+  Sleep [adjusted,pos="-1.162,1.409",label="Sleep Duration"]
+  "Race/Ethnicity" -> Depression
+  "Race/Ethnicity" -> SaturatedFat
+  Age -> Depression
+  Age -> SaturatedFat
+  Education -> Depression
+  Education -> SaturatedFat
+  Gender -> Depression
+  Gender -> SaturatedFat
+  PhysicalActivity -> Depression
+  PhysicalActivity -> SaturatedFat
+  SaturatedFat -> Depression
+  SaturatedFat -> Sleep
+  Sleep -> Depression
+}
+')
+# 
+# 
+# dag
+plot(dag)
+
+```
+
+---
+
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 df <- merge(df_demographics, df_nutrient, by = "SEQN", all = FALSE)
 df <- merge(df, df_depression, by = "SEQN", all = FALSE)
 df
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 head(df)
 ```
 
-### select analysis subset of variables
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 vars = c(
     'RIDAGEYR' #age
   , 'DMDHRGND' #gender
   , 'RIDRETH3' #ethnicity
   , 'DMDEDUC2' #education
   , 'DR1TSFAT' #sat fat
+  , 'WTINT2YR'
   , 'dsmv_depression' 
   )
 
@@ -99,12 +251,12 @@ df_analysis <- df[vars]
 str(df_analysis)
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 df_analysis <- df_analysis[!is.na(df_analysis$DR1TSFAT), ]
 df_analysis <- df_analysis[!is.na(df_analysis$dsmv_depression), ]
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 
 df_analysis$DMDHRGND <- factor(df_analysis$DMDHRGND,
                                 levels = c(1, 2),
@@ -113,7 +265,7 @@ df_analysis$DMDHRGND <- factor(df_analysis$DMDHRGND,
 
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 
 mapping <- c(
   "1" = "Hispanic",
@@ -135,7 +287,7 @@ df_analysis$RIDRETH3 <- factor(df_analysis$RIDRETH3,
 
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 edu_mapping <- c(
   "1" = "Less than high school grad",   # <9th grade
   "2" = "Less than high school grad",   # 9-11th grade
@@ -156,15 +308,88 @@ df_analysis$DMDEDUC2 <- factor(df_analysis$DMDEDUC2,
 
 ```
 
-### Table1
+## Methods: Data Processing
 
-```{r}
-label(df_analysis$RIDAGEYR)   <- "Age (years)"
-label(df_analysis$DMDHRGND)   <- "Gender"
-label(df_analysis$RIDRETH3)   <- "Ethnicity"
-label(df_analysis$DMDEDUC2)   <- "Education"
-label(df_analysis$DR1TSFAT)   <- "Saturated Fat Intake (g/day)"
-label(df_analysis$dsmv_depression) <- "DSM-V Depression"
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+
+n_demo <- nrow(df_demographics)
+n_depr <- nrow(df_depression)
+n_nutr <- nrow(df_nutrient)
+
+n_df   <- nrow(df)
+n_final   <- nrow(df_analysis)
+n_removed <- n_df - n_final
+
+```
+
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+
+diagram_str <- sprintf("
+digraph flowchart {
+  rankdir=TB;                 // top-to-bottom layout
+  graph [splines=polyline];   // straight segments instead of curved splines
+
+  // node styling
+  node [fontname = Helvetica, shape = rectangle, fontsize = 15,
+        style=filled, fillcolor=\"#edf2f7\", color=\"#2d3748\"];
+
+  // Define nodes
+  node1 [label = '@@1'];
+  node2 [label = '@@2'];
+  node3 [label = '@@3'];
+  node4 [label = '@@4'];
+  node5 [label = '@@5'];
+  node6 [label = '@@6'];
+  
+  spacer46 [shape=point, label=\"\", style=invis, fixedsize=true, width=0.6, height=0.01];
+
+  // Keep node4 and node6 aligned horizontally (same row)
+  { rank = same; node4; node6;}
+
+  // Edges
+  node1 -> node4;
+  node2 -> node4;
+  node3 -> node4;
+  node4 -> node5;
+  node4 -> node6 [tailport=e, headport=w, constraint=false];  // exit right, enter left, don't force rank
+}
+
+// Substitution text for @@1..@@6
+[1]: 'Demographics DS\\n n = %d'
+[2]: 'Nutritional DS\\n n = %d'
+[3]: 'Depression DS\\n n = %d'
+[4]: 'Merged dataframe\\n n = %d'
+[5]: 'Analysis dataframe\\n n = %d'
+[6]: 'Excluded\\n n = %d'
+",
+  n_demo, n_nutr, n_depr, n_df, n_final, n_removed
+)
+
+grViz(diagram_str)
+
+```
+
+
+---
+
+## Table 1
+<div class="zoom-125">
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+
+# Hmisc::label(df_analysis$RIDAGEYR)   <- "Age (years)"
+# Hmisc::label(df_analysis$DMDHRGND)   <- "Gender"
+# Hmisc::label(df_analysis$RIDRETH3)   <- "Ethnicity"
+# Hmisc::label(df_analysis$DMDEDUC2)   <- "Education"
+# Hmisc::label(df_analysis$DR1TSFAT)   <- "Saturated Fat Intake (g/day)"
+# Hmisc::label(df_analysis$dsmv_depression) <- "DSM-V Depression"
+
+attr(df_analysis$RIDAGEYR,        "label") <- "Age (years)"
+attr(df_analysis$DMDHRGND,        "label") <- "Gender"
+attr(df_analysis$RIDRETH3,        "label") <- "Ethnicity"
+attr(df_analysis$DMDEDUC2,        "label") <- "Education"
+attr(df_analysis$DR1TSFAT,        "label") <- "Saturated Fat Intake (g/day)"
+attr(df_analysis$dsmv_depression, "label") <- "DSM-V Depression"
 
 
 table1(~ RIDAGEYR + DMDHRGND + RIDRETH3 + DMDEDUC2 + DR1TSFAT | dsmv_depression,
@@ -172,13 +397,19 @@ table1(~ RIDAGEYR + DMDHRGND + RIDRETH3 + DMDEDUC2 + DR1TSFAT | dsmv_depression,
        overall = FALSE)
 
 ```
+</div>
 
-```{r}
+
+---
+
+## Data Exploration
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 
 df_analysis$DR1TSFAT <- as.numeric(df_analysis$DR1TSFAT)
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE, warning=FALSE, results='hide'}
 ggplot(df, aes(x = dsmv_depression)) +
   geom_bar(fill = "steelblue") +
   labs(title = "DSM-V Depression Diagnosis",
@@ -188,7 +419,83 @@ ggplot(df, aes(x = dsmv_depression)) +
 
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE, warning=FALSE, results='hide'}
+
+ggplot(df, aes(x = factor(1), fill = factor(dsmv_depression, levels = c(0, 1), labels = c("No", "Yes")))) +
+  geom_bar(width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = c("No" = "steelblue", "Yes" = "#FF6B6B")) +
+  labs(
+    title = "DSM-V Depression Diagnosis",
+    fill  = "DSM-V Depression"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  )
+
+```
+
+
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, fig.width=7, fig.height=5, out.width='100%', dpi=150}
+library(ggplot2)
+library(patchwork)
+
+# A common theme block to standardize margins & title position
+common_theme <- theme(
+  plot.title.position = "plot",
+  plot.margin = margin(10, 10, 10, 10),   # symmetric margins
+  aspect.ratio = 1                         # equal panel aspect ratio
+)
+
+# Bar chart (make panel square & trim extra vertical padding)
+p_bar <- ggplot(df, aes(x = dsmv_depression)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    title = "Counts",
+    x = "DSM-V Depression (0 = No, 1 = Yes)",
+    y = "Count"
+  ) +
+  theme_minimal(base_size = 12) +
+  common_theme +
+  # optional: tighten y expansion so bars don't add extra space
+  scale_y_continuous(expand = expansion(mult = c(0.02, 0.04))) +
+  # optional: remove y title if you want a tighter look
+  # labs(y = NULL) +
+  coord_fixed(ratio = 1)
+
+# Pie chart (square panel via aspect.ratio; title moved to annotation)
+p_pie <- ggplot(
+  df,
+  aes(
+    x = factor(1),
+    fill = factor(dsmv_depression, levels = c(0, 1), labels = c("No", "Yes"))
+  )
+) +
+  geom_bar(width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  scale_fill_manual(values = c("No" = "steelblue", "Yes" = "#FF6B6B")) +
+  labs(fill = "DSM-V Depression", title = "Proportions") +
+  theme_void(base_size = 12) +
+  common_theme
+
+# Side-by-side with shared title & legend collected
+combined <- (p_bar | p_pie) +
+  plot_layout(widths = c(2, 1), guides = "collect") +
+  plot_annotation(
+    title = "DSM-V Depression",
+    theme = theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+  ) &
+  theme(legend.position = "bottom")
+
+combined
+
+
+```
+
+
+```{r, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE, warning=FALSE, results='hide'}
 
 ggplot(df_analysis, aes(x = DR1TSFAT)) +
   geom_histogram(binwidth = 5, fill = "steelblue", color = "black") +
@@ -211,7 +518,7 @@ facet_wrap(
 
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=FALSE, message=FALSE, warning=FALSE, results='hide'}
 
 ggplot(df_analysis, aes(x = factor(dsmv_depression), y = DR1TSFAT)) +
   geom_boxplot(fill = "lightblue") +
@@ -222,31 +529,56 @@ ggplot(df_analysis, aes(x = factor(dsmv_depression), y = DR1TSFAT)) +
 
 ```
 
-### doing a basic t-test
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE}
 
-it shows that there is no significant difference in means of the 2 groups
 
-```{r}
-t.test(DR1TSFAT ~ dsmv_depression, data = df_analysis)
+# A) Histogram faceted by depression status (single facet_wrap)
+p_hist <- ggplot(df_analysis, aes(x = DR1TSFAT)) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "black") +
+  facet_wrap(
+    ~ dsmv_depression,
+    ncol = 2,
+    scales = "free_y",
+    labeller = as_labeller(c(`0` = "No depression", `1` = "Depression"))
+  ) +
+  labs(
+    x        = "Saturated Fat Intake (grams)",
+    y        = "Count"
+  ) +
+  theme_minimal()
+
+# B) Boxplot by depression status (with readable labels)
+p_box <- ggplot(
+  df_analysis,
+  aes(x = factor(dsmv_depression, levels = c(0, 1),
+                 labels = c("No depression", "Depression")),
+      y = DR1TSFAT)
+) +
+  geom_boxplot(fill = "lightblue") +
+  labs(
+    x     = "Depression status",
+    y     = "Saturated Fat Intake (grams)"
+  ) +
+  theme_minimal()
+
+
+
+# install.packages("patchwork")  # run once if not installed
+library(patchwork)
+
+combined <- p_hist / p_box +                     # "/" stacks rows
+  plot_layout(heights = c(2, 2)) +               # histogram ~2x the height of boxplot
+  plot_annotation(
+    title = "Saturated Fat Intake: Distribution and Summary",
+    theme = theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+  )
+
+combined
+
+
 ```
 
-## AGE fails linearity assumption in box tidwell
-
-```{r}
-
-model <- glm(dsmv_depression ~ DR1TSFAT + RIDAGEYR + RIDAGEYR*log(RIDAGEYR) + RIDRETH3 + DMDEDUC2,
-             data = df_analysis,
-             family = binomial(link = "logit"))
-
-
-summary(model)
-
-#exp(cbind(OR = coef(model), confint(model)))
-
-tidy(model, conf.int = TRUE)
-```
-
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE}
 ggplot(df_analysis, aes(x = RIDAGEYR)) +
   geom_histogram(binwidth = 5, fill = "steelblue", color = "black") +
   labs(title = "Distribution of Age",
@@ -255,7 +587,95 @@ ggplot(df_analysis, aes(x = RIDAGEYR)) +
   theme_minimal()
 ```
 
-```{r}
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE}
+
+## (Optional but recommended) base-R subset to drop NAs and zero weights
+df_plot <- subset(df_analysis, !is.na(RIDAGEYR) & WTINT2YR > 0)
+
+ggplot(
+  df_plot,
+  aes(
+    x = as.numeric(RIDAGEYR),  # ensure continuous
+    weight = WTINT2YR          # sum of weights in each bin
+  )
+) +
+  geom_histogram(binwidth = 5, fill = "steelblue", color = "black") +
+  labs(
+    title = "Distribution of Age (Weighted)",
+    x = "Age (years)",
+    y = "Weighted count"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+```{r, echo=TRUE, eval=TRUE, include=TRUE, message=TRUE, warning=FALSE}
+t.test(DR1TSFAT ~ dsmv_depression, data = df_analysis)
+
+# t = 0.42622, df = 245.22, p-value = 0.6703
+```
+
+## Test of assumptions
+
+Age significant on box-tidwell.
+`"<40", "40-65", ">65"`
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
+
+model <- glm(dsmv_depression ~ DR1TSFAT + RIDAGEYR + RIDAGEYR*log(RIDAGEYR) + RIDRETH3 + DMDEDUC2,
+             data = df_analysis,
+             family = binomial(link = "logit"))
+
+
+# summary(model)
+
+tidy(model, conf.int = TRUE)
+```
+
+```{r include=FALSE}
+influence.measures(model)
+```
+
+```{r include=FALSE}
+
+
+## Packages (install if needed)
+# install.packages(c("ResourceSelection", "pROC", "DescTools"))
+
+library(ResourceSelection)  # hoslem.test
+library(pROC)               # ROC/AUC
+library(DescTools)          # BrierScore
+
+## 1) Predicted probabilities from your existing model
+p_hat <- fitted(model)  # same as predict(model, type = "response")
+
+## 2) Extract observed outcome from the model object WITHOUT refitting
+# Try to get y from the stored model frame; this works even when y=FALSE in glm
+mf <- try(model.frame(model), silent = TRUE)
+if (!inherits(mf, "try-error")) {
+  y_obs <- mf[[1]]
+} else if (!is.null(model$y)) {
+  y_obs <- model$y
+} else {
+  stop("Could not recover the observed outcome from `model`. 
+       Re-run glm with x=TRUE, y=TRUE or provide the y-vector explicitly.")
+}
+
+## Sanity check: align lengths & remove NAs consistently
+keep <- complete.cases(y_obs, p_hat)
+y_obs <- y_obs[keep]
+p_hat <- p_hat[keep]
+
+## 3) Hosmer–Lemeshow test (default g = 10 groups)
+hl <- hoslem.test(x = y_obs, y = p_hat, g = 10)
+hl
+```
+
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 
 df_analysis$RIDAGEYR <- cut(df_analysis$RIDAGEYR,
                              breaks = c(-Inf, 40, 65, Inf),
@@ -264,27 +684,39 @@ df_analysis$RIDAGEYR <- cut(df_analysis$RIDAGEYR,
 
 summary(glm(dsmv_depression ~ DR1TSFAT + RIDAGEYR + RIDRETH3 + DMDEDUC2,
              data = df_analysis,
-             family = binomial(link = "logit")))
+             family = binomial(link = "logit"), weights= WTINT2YR))
 ```
 
-## AGE, potential confounder?
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 
-anova_model <- aov(DR1TSFAT ~ RIDAGEYR, data = df_analysis)
+anova_model <- aov(DR1TSFAT ~ RIDAGEYR, data = df_analysis, weights = WTINT2YR)
 summary(anova_model)
 
 ```
 
-## Imputaiton
 
-imputed values missing in all rows, except for outcome and main exposure
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 
-```{r}
+fit0 <- glm(dsmv_depression ~ DR1TSFAT + RIDAGEYR + RIDAGEYR + RIDRETH3 + DMDEDUC2,
+             data = df_analysis,
+             family = binomial(link = "logit"))
+
+
+# summary(model)
+
+tidy(fit0, conf.int = TRUE)
+```
+
+--- 
+
+## Missing data
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 md.pattern(df_analysis, rotate.names = TRUE)
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 
 # Create a imputation method vector
 meth <- make.method(df_analysis)
@@ -301,7 +733,7 @@ pred[, "dsmv_depression"] <- 0
 pred; meth
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
 
 set.seed(123)  # reproducibility
 imp <- mice(
@@ -315,7 +747,7 @@ print(imp)
 
 ```
 
-```{r}
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE}
 
 fit <- with(imp, glm(dsmv_depression ~ DR1TSFAT + RIDAGEYR +
                      RIDRETH3 + DMDEDUC2,
@@ -328,18 +760,96 @@ summary(pooled)
 
 ```
 
-### pooled value also doesn't show a statistically significant association between saturate fat intake and depression prevalence
+---
 
-Age \> 65, and being a high-school graduate or higher education were negatively correlated
+## Results
 
-```{r}
-tidy(pooled, conf.int = TRUE, exponentiate = FALSE)
-```
+pooled results do not show a statistically significant association between saturated fat intake and depression prevalence
 
-```{r}
 
-tidy_res <- tidy(pooled, conf.int = TRUE, exponentiate = TRUE)
-
-write.csv(tidy_res, "model_results.csv", row.names = FALSE)
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
+tidy(pooled, conf.int = TRUE, exponentiate = TRUE)
 
 ```
+```{r, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
+
+library(knitr)
+
+sp <- summary(pooled, conf.int = TRUE, conf.level = 0.95)
+# sp columns: term, estimate (log-odds), std.error, statistic, df, p.value, `2.5 %`, `97.5 %`
+
+# Convert to Odds Ratios and 95% CI on OR scale
+OR      <- exp(sp$estimate)
+CI_low  <- exp(sp$`2.5 %`)
+CI_high <- exp(sp$`97.5 %`)
+
+# Build table
+tab <- data.frame(
+  Predictor = sp$term,
+  OR        = sprintf("%.3f", OR),
+  `95% CI`  = sprintf("%.2f–%.2f", CI_low, CI_high),
+  `p`       = ifelse(sp$p.value < .001, "<0.001", sprintf("%.3f", sp$p.value)),
+  check.names = FALSE
+)
+
+# Optional pretty labels
+label_map <- c(
+  "(Intercept)" = "Intercept",
+  "DR1TSFAT"    = "Total fat intake",
+  "RIDAGEYR"    = "Age (years)",
+  "RIDRETH3"    = "Race/Ethnicity",
+  "DMDEDUC2"    = "Education"
+)
+tab$Predictor <- ifelse(tab$Predictor %in% names(label_map),
+                        label_map[tab$Predictor], tab$Predictor)
+
+# Render for your Reveal.js slide
+kable(tab[c(2),], format = "html", caption = "DSM-V Depression (Odds Ratios, pooled across imputations)\nnormalized by age, sex, educational status, ethnicity")
+
+```
+
+
+
+
+
+
+
+
+- Age \> 65, and being a high-school graduate or higher education were negatively correlated
+
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
+
+#tidy_res <- tidy(pooled, conf.int = TRUE, exponentiate = TRUE)
+
+#write.csv(tidy_res, "model_results.csv", row.names = FALSE)
+
+```
+
+
+```{r, echo=FALSE, eval=TRUE, include=TRUE, message=FALSE, warning=FALSE, results='hide'}
+
+#rmarkdown::render("data_management+analysis.Rmd", output_format = "xaringan::moon_reader")
+# rmarkdown::render("data_management+analysis.Rmd", output_format = "revealjs::revealjs_presentation")
+# rmarkdown::render("data_management+analysis.Rmd", output_format = "ioslides_presentation")
+#rmarkdown::render("data_management+analysis.Rmd", output_format = "pandoc")
+
+```
+
+
+---
+
+## Limitations
+
+- self reported
+- retrospective
+- cross sectional
+- non-generalizable distribution
+
+---
+
+## Acknowlagements
+
+- Dr. Kim Johnson
+- Cindy Kang
+- The internet
